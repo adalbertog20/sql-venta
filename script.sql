@@ -1,6 +1,7 @@
 CREATE DATABASE IF NOT EXISTS PuntoVenta;
-
+-- DROP DATABASE puntoventa;
 USE PuntoVenta;
+
 CREATE TABLE IF NOT EXISTS cliente(
 idCliente INT AUTO_INCREMENT PRIMARY KEY,
 nombre VARCHAR(80) NOT NULL,
@@ -57,9 +58,9 @@ ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS detalleFechaEntrega(
-    idCliente INT NOT NULL,
-    region VARCHAR(20),
-    mensaje VARCHAR(100)
+idCliente INT NOT NULL,
+region VARCHAR(20),
+mensaje VARCHAR(100)
 );
 
 DROP PROCEDURE IF EXISTS spInsertarCliente;
@@ -143,13 +144,13 @@ BEGIN
 DECLARE varExisteProducto, varCantidadProd INT;
 SET varExisteProducto=(SELECT COUNT(*) FROM producto WHERE idProducto=paramIdProducto);
 IF varExisteProducto = 1 THEN
-  SET varCantidadProd=(SELECT COUNT(*) FROM detalleVenta WHERE cantidadProducto>=paramCantidadProducto);
-  IF varCantidadProd = 1 THEN
-  START TRANSACTION;
-  UPDATE detalleVenta SET cantidadProducto = paramCantidadProducto WHERE idVenta=paramIdVenta;
-  UPDATE producto SET existencias = existencias - paramCantidadProducto WHERE idProducto=paramIdProducto;
-  COMMIT;
-  END IF;
+SET varCantidadProd=(SELECT COUNT(*) FROM detalleVenta WHERE cantidadProducto>=paramCantidadProducto);
+IF varCantidadProd = 1 THEN
+START TRANSACTION;
+UPDATE detalleVenta SET cantidadProducto = paramCantidadProducto WHERE idVenta=paramIdVenta;
+UPDATE producto SET existencias = existencias - paramCantidadProducto WHERE idProducto=paramIdProducto;
+COMMIT;
+END IF;
 END IF;
 END$$
 DELIMITER ;
@@ -158,31 +159,31 @@ DROP PROCEDURE IF EXISTS spAsignarFechaEntrega;
 DELIMITER $$;
 CREATE PROCEDURE spAsignarFechaEntrega(IN paramIdVenta INT)
 BEGIN
-    DECLARE varIdVentaExists INT DEFAULT 0;
-    DECLARE varIdUsuario INT DEFAULT 0;
-    DECLARE varRegion VARCHAR(20);
-    DECLARE varMensaje VARCHAR(100);
-    SET varIdUsuario = (SELECT IdCliente FROM venta where paramIdVenta=idVenta);
-    SET varIdVentaExists = (SELECT COUNT(*) FROM venta WHERE paramIdVenta=idVenta);
-    SET varRegion = (SELECT region FROM cliente WHERE varIdUsuario=idCliente);
-    CASE
-        WHEN varRegion = 'NOROESTE' THEN
-            SET varMensaje = '1 DIAS HABILES';
-        WHEN varRegion = 'NORESTE' THEN
-            SET varMensaje = '2 DIAS HABILES';
-        WHEN varRegion = 'OCCIDENTE' THEN
-            SET varMensaje =  '3 DIAS HABILES';
-        WHEN varRegion = 'ORIENTE' THEN
-            SET varMensaje =  '4 DIAS HABILES';
-        WHEN varRegion = 'CENTROSUR' THEN
-            SET varMensaje =  '5 DIAS HABILES';
-        WHEN varRegion = 'SUROESTE' THEN
-            SET varMensaje =  '6 DIAS HABILES';
-        WHEN varRegion = 'SURESTE' THEN
-            SET varMensaje =  '7 DIAS HABILES';
-        END CASE;
-    call spInsertarDFE(varIdUsuario, varRegion, varMensaje);
-    SELECT * FROM detalleFechaEntrega;
+DECLARE varIdVentaExists INT DEFAULT 0;
+DECLARE varIdUsuario INT DEFAULT 0;
+DECLARE varRegion VARCHAR(20);
+DECLARE varMensaje VARCHAR(100);
+SET varIdUsuario = (SELECT IdCliente FROM venta where paramIdVenta=idVenta);
+SET varIdVentaExists = (SELECT COUNT(*) FROM venta WHERE paramIdVenta=idVenta);
+SET varRegion = (SELECT region FROM cliente WHERE varIdUsuario=idCliente);
+CASE
+WHEN varRegion = 'NOROESTE' THEN
+SET varMensaje = '1 DIAS HABILES';
+WHEN varRegion = 'NORESTE' THEN
+SET varMensaje = '2 DIAS HABILES';
+WHEN varRegion = 'OCCIDENTE' THEN
+SET varMensaje =  '3 DIAS HABILES';
+WHEN varRegion = 'ORIENTE' THEN
+SET varMensaje =  '4 DIAS HABILES';
+WHEN varRegion = 'CENTROSUR' THEN
+SET varMensaje =  '5 DIAS HABILES';
+WHEN varRegion = 'SUROESTE' THEN
+SET varMensaje =  '6 DIAS HABILES';
+WHEN varRegion = 'SURESTE' THEN
+SET varMensaje =  '7 DIAS HABILES';
+END CASE;
+call spInsertarDFE(varIdUsuario, varRegion, varMensaje);
+SELECT * FROM detalleFechaEntrega;
 END $$;
 DELIMITER ;
 
@@ -191,50 +192,104 @@ DROP PROCEDURE IF EXISTS spInsertarDFE;
 DELIMITER $$;
 CREATE PROCEDURE spInsertarDFE(IN paramIdCliente INT, IN paramRegion VARCHAR(20), IN paramMensaje VARCHAR(100))
 BEGIN
-    START TRANSACTION;
-    SET AUTOCOMMIT = 0;
-    INSERT INTO detalleFechaEntrega (idCliente, region, mensaje) VALUES (paramIdCliente, paramRegion, paramMensaje);
-    COMMIT;
+START TRANSACTION;
+SET AUTOCOMMIT = 0;
+INSERT INTO detalleFechaEntrega (idCliente, region, mensaje) VALUES (paramIdCliente, paramRegion, paramMensaje);
+COMMIT;
 END $$;
 DELIMITER ;
+
+/*
+Crear procedimiento para calcular la fecha estimada de entrega
+de todas las ventas registradas, con base en la región a la que
+pertenece el cliente y la inserte en una nueva columna ‘FechaEstimada’ de la tabla Venta.
+*/
 
 DROP PROCEDURE IF EXISTS spCalcularFechaEntrega;
 DELIMITER  $$;
 CREATE PROCEDURE spCalcularFechaEntrega()
 BEGIN
-    DECLARE registros INT DEFAULT 0;
-    DECLARE i INT DEFAULT 0;
-    DECLARE intervalo INT DEFAULT 0;
-    DECLARE varFechaVenta DATE;
-    DECLARE varRegionCliente VARCHAR(15);
-    SET i = 1;
-    SET registros = (SELECT COUNT(*) FROM venta);
-    WHILE i <= registros DO
-        SET varRegionCliente=(SELECT region FROM cliente WHERE i=idCliente);
-        SET varFechaVenta=(SELECT fechaVenta FROM venta WHERE idVenta=i);
-    CASE
-        WHEN varRegionCliente = 'NOROESTE' THEN
-            SET intervalo = 1;
-        WHEN varRegionCliente = 'NORESTE' THEN
-            SET intervalo = 2;
-        WHEN varRegionCliente = 'OCCIDENTE' THEN
-            SET intervalo = 3;
-        WHEN varRegionCliente = 'ORIENTE' THEN
-            SET intervalo = 4;
-        WHEN varRegionCliente = 'CENTRONORTE' THEN
-            SET intervalo = 5;
-        WHEN varRegionCliente = 'CENTROSUR' THEN
-            SET intervalo = 5;
-        WHEN varRegionCliente = 'SUROESTE' THEN
-            SET intervalo = 6;
-        WHEN varRegionCliente = 'SURESTE' THEN
-            SET intervalo = 7;
+DECLARE registros INT DEFAULT 0;
+DECLARE i INT DEFAULT 0;
+DECLARE intervalo INT DEFAULT 0;
+DECLARE varFechaVenta DATE;
+DECLARE varRegionCliente VARCHAR(15);
+SET i = 1;
+SET registros = (SELECT COUNT(*) FROM venta);
+WHILE i <= registros DO
+SET varRegionCliente=(SELECT region FROM cliente WHERE i=idCliente);
+SET varFechaVenta=(SELECT fechaVenta FROM venta WHERE idVenta=i);
+CASE
+WHEN varRegionCliente = 'NOROESTE' THEN
+SET intervalo = 1;
+WHEN varRegionCliente = 'NORESTE' THEN
+SET intervalo = 2;
+WHEN varRegionCliente = 'OCCIDENTE' THEN
+SET intervalo = 3;
+WHEN varRegionCliente = 'ORIENTE' THEN
+SET intervalo = 4;
+WHEN varRegionCliente = 'CENTRONORTE' THEN
+SET intervalo = 5;
+WHEN varRegionCliente = 'CENTROSUR' THEN
+SET intervalo = 5;
+WHEN varRegionCliente = 'SUROESTE' THEN
+SET intervalo = 6;
+WHEN varRegionCliente = 'SURESTE' THEN
+SET intervalo = 7;
 END CASE;
-        UPDATE venta SET fechaEstimada = (DATE_ADD(varFechaVenta), intervalo) WHERE idVenta=i;
-        SET i=i+1;
-    END WHILE;
+UPDATE venta SET fechaEstimada = (DATE_ADD(varFechaVenta,  INTERVAL intervalo DAY)) WHERE idVenta=i;
+SET i=i+1;
+END WHILE;
 END $$;
 DELIMITER ;
+
+/* Crear procedimiento que permita incrementar un 10 % el precio de todos los productos
+que se encuentren por debajo del promedio y mostrarlos en una cadena concatenada. Fecha de entrega: 21 sept, 10:00 */
+
+DROP PROCEDURE IF EXISTS spIncrementarPrecio;
+DELIMITER $$;
+CREATE PROCEDURE spIncrementarPrecio()
+BEGIN
+DECLARE contador, varRegistros, varPrecio INT DEFAULT 0;
+DECLARE i INT DEFAULT 1;
+DECLARE cadena VARCHAR(100);
+SET varRegistros = (SELECT COUNT(*) FROM venta);
+WHILE i <= varRegistros DO
+IF (SELECT precio FROM producto WHERE idProducto=i) < (SELECT AVG(precio) FROM producto) THEN
+   SET contador=contador+1;
+   SET varPrecio = ((SELECT precio FROM producto WHERE idProducto=i)*(1.10));
+   UPDATE PuntoVenta.producto SET precio=varPrecio WHERE idProducto=i;
+   SELECT CONCAT(i, (SELECT nombre FROM producto WHERE idProducto=i), (varPrecio)) AS spIncrementarPrecio;
+END IF;
+SET i=i+1;
+END WHILE;
+END $$;
+DELIMITER ;
+
+-- call spIncrementarPrecio();
+
+/*
+Crear procedimiento que ingrese el id de un producto y permita mostrar en una lista
+concatenada el ID del cliente, nombre completo y el monto total de venta de dicho producto.
+
+Resultado Ejemplo:
+
+CALL spVentasxProd(3);
+Ventas del producto: 1 - MARTILLO ROJO TRUPER MANGO MADERA
+----------------------------------------------------------------------
+03 – MARCO MENDEZ – $1254.00
+04 – RAÚL LÓPEZ - $625.00
+
+*/
+
+DROP PROCEDURE IF EXISTS spMostrarCadena;
+DELIMITER $$;
+CREATE PROCEDURE spMostrarCadena(IN paramIdProducto INT)
+BEGIN
+END $$;
+DELIMITER ;
+
+-- call spMostrarCadena(2);
 
 INSERT INTO producto(nombre, precio, existencias, codigoBarra)
 VALUES('Doritos Dinamita', 17, 500, '310447819479');
@@ -249,17 +304,18 @@ CALL spInsertarCliente('Diego', 'Negrete', 'Olachea', '2002-01-24', 'DOGO012384'
 'Col Los Olivos', '23029', 'La Paz', 'BCS', 'México', '6127124', '182369',
 'diego_20@alu.uabcs.mx', '2022-08-31 21:32:17');
 
-CALL spInsertarCliente('El', 'Tilin', 'Etesech', '2003-01-03', 'GAMA030d03HS', 'GAMAd30103HBSR',
-'Col Cardenas', '23030', 'La Paz', 'CDMX', 'México', '6121442134', '6123231408',
-'adalbertog_10@alu.uabcs.mx', '2022-08-31 21:32:17');
+CALL spInsertarCliente('El', 'Tilin', 'Etesech', '2003-01-03', 'TILINSOADI123', 'TILINSODIJD',
+'Col Cardenas', '23030', 'La Paz', 'CDMX', 'México', '6121442134', '6123233408',
+'tilin_2@alu.uabcs.mx', '2022-08-31 21:32:17');
 
 
-CALL spVenderProducto(1, 2, 20, 20220101);
-CALL spVenderProducto(2, 1, 50, 20220902);
-CALL spVenderProducto(5, 2, 25, 20220902);
+CALL spVenderProducto(1, 2, 20, CURDATE());
+CALL spVenderProducto(2, 1, 50, CURDATE());
+CALL spVenderProducto(3, 2, 50, CURDATE());
 
 INSERT INTO producto(nombre, precio, existencias, codigoBarra) VALUES
 ('Pinguino 50 g', 15, 80, 750547899810),
 ('Tostitos 80 g', 18, 50, 750047898784);
 
 CALL spActualizarMontoVenta(1, 2, 123);
+CALL spCalcularFechaEntrega();
